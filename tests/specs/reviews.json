@@ -1,0 +1,44 @@
+[
+  {
+    "name": "reviews empty state when there are no reviews",
+    "steps": [
+      {
+        "send": { "callback": "reviews:list" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "⭐ Reviews\n\nNo reviews yet — be the first!" }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "review:start refuses for a booking that's not ready",
+    "steps": [
+      {
+        "send": { "callback": "review:start:nonexistent" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "That booking isn't ready for a review yet." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "review cancel clears the review flow",
+    "steps": [
+      {
+        "send": { "callback": "review:cancel" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Review cancelled." }
+          }
+        ]
+      }
+    ]
+  }
+]

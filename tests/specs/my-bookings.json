@@ -1,0 +1,44 @@
+[
+  {
+    "name": "my-bookings empty state when the user has no bookings",
+    "steps": [
+      {
+        "send": { "callback": "bookings:history" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "📖 No bookings yet — tap 📅 Book service to schedule your first visit!"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "my-bookings shows the user's confirmed booking",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:start:Glow Facial" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "booking:slot:2099-01-01T09:00:00.000Z" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Alex" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "+15551234567" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:confirm" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "bookings:history" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "📖 Your bookings\n\n• 2099-01-01 09:00 UTC — Glow Facial (🟢 confirmed)" }
+          }
+        ]
+      }
+    ]
+  }
+]

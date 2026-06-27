@@ -1,0 +1,65 @@
+[
+  {
+    "name": "services empty state when no services are configured",
+    "steps": [
+      {
+        "send": { "callback": "services:list" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "💅 No services yet.\nThe studio is setting up — check back soon!"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "admin adds a service and the user sees it in the catalogue",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:services" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60 min deep-cleansing facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79.00" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "services:list" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "💅 Our services\n\n• Glow Facial — $79.00 · 60 min"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "service detail opens by name with a Book button",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Manicure" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Classic polish" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "25" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "30" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "services:detail:Manicure" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "💅 Manicure\n\nClassic polish\n\nPrice: $25.00 · Duration: 30 min"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
