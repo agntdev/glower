@@ -1,0 +1,120 @@
+[
+  {
+    "name": "non-admin gets the claim screen when no admins exist",
+    "steps": [
+      {
+        "send": { "text": "/admin" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "🔐 No admin set yet.\n\nTap below to claim owner access. Once set, you can add more admins from the admin menu."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "second claim attempt is rejected after first claim succeeded",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "admin:claim" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "🔐 Admin already exists." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "admin CRUD: add a service and then delete it",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:services" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "admin:services" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "admin:service-edit:Glow Facial" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "💅 Glow Facial\nHydrating facial\nPrice: $79.00 · Duration: 60 min"
+            }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "admin:service-delete:Glow Facial" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "🗑 Service deleted." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "admin CRUD: add a staff member and remove them",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:staff" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:staff-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Maria" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "all" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "admin:staff" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "admin:staff-edit:Maria" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "admin:staff-delete:Maria" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "🗑 Staff removed." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "admin CSV export sends a document",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:start:Glow Facial" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "booking:slot:2099-01-01T09:00:00.000Z" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Alex" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "+15551234567" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:confirm" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "admin:export" },
+        "expect": [{ "method": "sendDocument" }]
+      }
+    ]
+  }
+]

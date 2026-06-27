@@ -1,0 +1,51 @@
+[
+  {
+    "name": "portfolio empty state when no items are uploaded",
+    "steps": [
+      {
+        "send": { "callback": "portfolio:list" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "📸 Portfolio coming soon.\nCheck back after your first booking!"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "admin uploads a portfolio photo via admin:portfolio-new",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:portfolio" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:portfolio-new" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": {
+          "update": {
+            "update_id": 100,
+            "message": {
+              "message_id": 100,
+              "date": 0,
+              "chat": { "id": 1, "type": "private", "first_name": "Test" },
+              "from": { "id": 1, "is_bot": false, "first_name": "Test" },
+              "photo": [
+                { "file_id": "thumb", "file_unique_id": "t", "width": 90, "height": 60, "file_size": 1 },
+                { "file_id": "full", "file_unique_id": "f", "width": 800, "height": 600, "file_size": 100 }
+              ]
+            }
+          }
+        },
+        "expect": [{ "method": "sendMessage" }]
+      },
+      { "send": { "text": "Before & after facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "none" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "portfolio:list" },
+        "expect": [{ "method": "editMessageText" }]
+      }
+    ]
+  }
+]

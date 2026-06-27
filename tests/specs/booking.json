@@ -1,0 +1,147 @@
+[
+  {
+    "name": "booking:start empty state when no services exist",
+    "steps": [
+      {
+        "send": { "callback": "booking:start" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "💅 No services available right now. Check back soon!"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "booking:start lists services; no staff skips straight to slot step",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "booking:start" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "📅 Choose a service:" }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "booking:service:Glow Facial" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "📅 Choose a time slot:" }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "booking:start:<name> jumps past the service step",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "booking:start:Glow Facial" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "📅 Choose a time slot:" }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "end-to-end booking with auto-confirmation (injected slot)",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:start:Glow Facial" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "booking:slot:2099-01-01T09:00:00.000Z" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "📝 What's your name?\n\n(Type your name, then send.)" }
+          }
+        ]
+      },
+      { "send": { "text": "Alex" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "+15551234567" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "booking:confirm" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "✅ Booked!\n\nGlow Facial\n2099-01-01 09:00 UTC\n\nWe'll remind you when it's time. See you soon! 💅" }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "invalid phone is rejected and re-prompted",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:start:Glow Facial" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "booking:slot:2099-01-01T09:00:00.000Z" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Alex" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "abc" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "That doesn't look like a phone number. Try again (digits, +, spaces, dashes, parens)." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "booking cancel resets the flow",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "booking:cancel" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Booking cancelled." }
+          }
+        ]
+      }
+    ]
+  }
+]
