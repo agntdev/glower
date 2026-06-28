@@ -21,6 +21,8 @@ registerMainMenuItem({ label: "📅 Book service", data: "booking:start", order:
 
 const composer = new Composer<Ctx>();
 
+const SLOTS_PER_PAGE = 8;
+
 const backToMenu = () => inlineKeyboard([[inlineButton("⬅️ Back to menu", "menu:main")]]);
 
 // Phone validation: digits, spaces, dashes, parens, leading +. At least 7 digits.
@@ -30,6 +32,7 @@ function startBooking(serviceId?: string): BookingFlowReset {
   return {
     step: serviceId ? "staff" : "service",
     ...(serviceId ? { serviceId } : {}),
+    slotPage: 0,
   };
 }
 
@@ -143,6 +146,7 @@ composer.callbackQuery(/^booking:staff:(.+)$/, async (ctx) => {
 // ── Step 3: slot ─────────────────────────────────────────────────────────────
 
 async function renderSlotStep(ctx: Ctx): Promise<void> {
+  const flow = ctx.session.booking;
   const slots = await listAvailableSlots();
   if (slots.length === 0) {
     await ctx.editMessageText(
@@ -152,11 +156,22 @@ async function renderSlotStep(ctx: Ctx): Promise<void> {
     delete ctx.session.booking;
     return;
   }
-  const rows = slots.slice(0, 12).map((s) => [
+  const page = (flow && typeof flow.slotPage === "number") ? flow.slotPage : 0;
+  const totalPages = Math.ceil(slots.length / SLOTS_PER_PAGE);
+  const clampedPage = Math.max(0, Math.min(page, totalPages - 1));
+  const pageSlots = slots.slice(clampedPage * SLOTS_PER_PAGE, (clampedPage + 1) * SLOTS_PER_PAGE);
+  const rows = pageSlots.map((s) => [
     inlineButton(`🕒 ${s.label}`, `booking:slot:${encodeURIComponent(s.datetime)}`),
   ]);
+  const navRow: ReturnType<typeof inlineButton>[] = [];
+  if (clampedPage > 0) navRow.push(inlineButton("« Prev", `booking:slot-page:${clampedPage - 1}`));
+  if (clampedPage < totalPages - 1) navRow.push(inlineButton("More »", `booking:slot-page:${clampedPage + 1}`));
+  if (navRow.length > 0) rows.push(navRow);
   rows.push([inlineButton("⬅️ Cancel booking", "booking:cancel")]);
-  await ctx.editMessageText("📅 Choose a time slot:", {
+  const label = totalPages > 1
+    ? `📅 Choose a time slot (page ${clampedPage + 1}/${totalPages}):`
+    : "📅 Choose a time slot:";
+  await ctx.editMessageText(label, {
     reply_markup: inlineKeyboard(rows),
   });
 }
@@ -216,6 +231,16 @@ composer.callbackQuery("booking:retry-slot", async (ctx) => {
   const flow = ctx.session.booking;
   if (!flow) return;
   flow.step = "slot";
+  flow.slotPage = 0;
+  ctx.session.booking = flow;
+  await renderSlotStep(ctx);
+});
+
+composer.callbackQuery(/^booking:slot-page:(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const flow = ctx.session.booking;
+  if (!flow || flow.step !== "slot") return;
+  flow.slotPage = Number(ctx.match![1]!);
   ctx.session.booking = flow;
   await renderSlotStep(ctx);
 });
@@ -233,6 +258,34 @@ composer.on("message:text", async (ctx, next) => {
       return;
     }
     flow.name = name;
+    const tgPhone = (ctx.from as { phone_number?: string } | undefined)?.phone_number;
+    if (tgPhone && tgPhone.trim()) {
+      flow.phone = tgPhone.trim();
+      flow.step = "confirm";
+      ctx.session.booking = flow;
+
+      const svc = flow.serviceId ? await getService(flow.serviceId) : undefined;
+      const staff = flow.staffId ? await getStaff(flow.staffId) : null;
+      const when = flow.datetime ? new Date(flow.datetime).toISOString().replace("T", " ").slice(0, 16) : "?";
+      const summary =
+        "📋 Booking summary\n\n" +
+        `Service: ${svc?.name ?? "?"}\n` +
+        `Staff: ${staff?.name ?? "No preference"}\n` +
+        `When: ${when}\n` +
+        `Name: ${flow.name}\n` +
+        `Phone: ${flow.phone}\n\n` +
+        "Confirm?";
+
+      await ctx.reply(summary, {
+        reply_markup: inlineKeyboard([
+          [
+            inlineButton("✅ Confirm", "booking:confirm"),
+            inlineButton("❌ Cancel", "booking:cancel"),
+          ],
+        ]),
+      });
+      return;
+    }
     flow.step = "phone";
     ctx.session.booking = flow;
     await ctx.reply(

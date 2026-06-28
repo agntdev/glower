@@ -171,5 +171,33 @@
         "expect": [{ "method": "editMessageText" }]
       }
     ]
+  },
+  {
+    "name": "admin views and edits settings (slot duration)",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "admin:settings" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "admin:settings-edit:slot_minutes" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "text": "30" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "✅ Slot duration set to 30 min." }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "admin:settings" },
+        "expect": [{ "method": "editMessageText" }]
+      }
+    ]
   }
 ]

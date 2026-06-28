@@ -11,6 +11,7 @@ import {
   deleteStaff,
   getBooking,
   getReview,
+  getSettings,
   hasOverlap,
   isAdmin,
   listAdmins,
@@ -24,6 +25,7 @@ import {
   saveBooking,
   savePortfolioItem,
   saveService,
+  saveSettings,
   saveStaff,
   updateReview,
 } from "../store.js";
@@ -95,6 +97,7 @@ async function renderAdminMenu(ctx: Ctx): Promise<void> {
         [inlineButton("⭐ Reviews", "admin:reviews")],
         [inlineButton("📅 Bookings", "admin:bookings")],
         [inlineButton("🔐 Admins", "admin:admins")],
+        [inlineButton("⚙️ Settings", "admin:settings")],
         [inlineButton("📤 Export bookings CSV", "admin:export")],
         [inlineButton("⬅️ Back to menu", "menu:main")],
       ]),
@@ -374,6 +377,66 @@ composer.on("message:text", async (ctx, next) => {
     await updateReview({ ...r, adminResponse: text });
     delete ctx.session.admin;
     await ctx.reply("✅ Response posted.", { reply_markup: backToAdmin() });
+    return;
+  }
+  if (flow.step === "settings_field") {
+    const s = await getSettings();
+    const field = flow.pendingSetting?.field;
+    if (field === "start_hour" || field === "end_hour") {
+      const val = Number(text);
+      if (!Number.isInteger(val) || val < 0 || val > 23) {
+        await ctx.reply("Send an integer between 0 and 23.");
+        return;
+      }
+      const updated = { ...s, [field === "start_hour" ? "startHour" : "endHour"]: val };
+      if (updated.startHour >= updated.endHour) {
+        await ctx.reply("Start hour must be before end hour.");
+        return;
+      }
+      await saveSettings(updated);
+      delete ctx.session.admin;
+      await ctx.reply(`✅ ${field === "start_hour" ? "Start" : "End"} hour set to ${val}:00.`, { reply_markup: backToAdmin() });
+      return;
+    }
+    if (field === "slot_minutes") {
+      const val = Number(text);
+      if (!Number.isInteger(val) || val < 5 || val > 480) {
+        await ctx.reply("Send an integer between 5 and 480.");
+        return;
+      }
+      await saveSettings({ ...s, slotMinutes: val });
+      delete ctx.session.admin;
+      await ctx.reply(`✅ Slot duration set to ${val} min.`, { reply_markup: backToAdmin() });
+      return;
+    }
+    if (field === "horizon_days") {
+      const val = Number(text);
+      if (!Number.isInteger(val) || val < 1 || val > 365) {
+        await ctx.reply("Send an integer between 1 and 365.");
+        return;
+      }
+      await saveSettings({ ...s, horizonDays: val });
+      delete ctx.session.admin;
+      await ctx.reply(`✅ Booking horizon set to ${val} days.`, { reply_markup: backToAdmin() });
+      return;
+    }
+    if (field === "timezone") {
+      const tz = text.trim();
+      if (tz.length === 0 || tz.length > 100) {
+        await ctx.reply("Send a valid IANA timezone (e.g. America/New_York).");
+        return;
+      }
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+      } catch {
+        await ctx.reply("That timezone is not recognized. Try again (e.g. UTC, America/New_York).");
+        return;
+      }
+      await saveSettings({ ...s, timezone: tz });
+      delete ctx.session.admin;
+      await ctx.reply(`✅ Timezone set to ${tz}.`, { reply_markup: backToAdmin() });
+      return;
+    }
     return;
   }
   return next();
@@ -819,6 +882,49 @@ composer.callbackQuery("admin:export", async (ctx) => {
     new InputFile(Buffer.from(csv, "utf8"), `bookings-${new Date().toISOString().slice(0, 10)}.csv`),
   );
   await ctx.reply("📤 Sent.", { reply_markup: backToAdmin() });
+});
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+composer.callbackQuery("admin:settings", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+  const s = await getSettings();
+  const text =
+    "⚙️ Settings\n\n" +
+    `Start hour: ${s.startHour}:00\n` +
+    `End hour: ${s.endHour}:00\n` +
+    `Slot duration: ${s.slotMinutes} min\n` +
+    `Booking horizon: ${s.horizonDays} days\n` +
+    `Timezone: ${s.timezone}\n\n` +
+    "Tap a field to change it:";
+  await ctx.editMessageText(text, {
+    reply_markup: inlineKeyboard([
+      [inlineButton("🕘 Start time", "admin:settings-edit:start_hour")],
+      [inlineButton("🕔 End time", "admin:settings-edit:end_hour")],
+      [inlineButton("⏱ Slot duration", "admin:settings-edit:slot_minutes")],
+      [inlineButton("📅 Booking horizon", "admin:settings-edit:horizon_days")],
+      [inlineButton("🌍 Timezone", "admin:settings-edit:timezone")],
+      [inlineButton("⬅️ Back to admin", "admin:menu")],
+    ]),
+  });
+});
+
+composer.callbackQuery(/^admin:settings-edit:(start_hour|end_hour|slot_minutes|horizon_days|timezone)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+  const field = ctx.match![1]!;
+  ctx.session.admin = { step: "settings_field", pendingSetting: { field } };
+  const prompts: Record<string, string> = {
+    start_hour: "🕘 Send the opening hour (0–23):",
+    end_hour: "🕔 Send the closing hour (0–23):",
+    slot_minutes: "⏱ Send the slot length in minutes (e.g. 60):",
+    horizon_days: "📅 Send how many days ahead to allow booking (e.g. 14):",
+    timezone: `🌍 Send an IANA timezone string (e.g. "America/New_York" or "UTC"):`,
+  };
+  await ctx.editMessageText(prompts[field] ?? "Send new value:", {
+    reply_markup: inlineKeyboard([[inlineButton("⬅️ Cancel", "admin:cancel-flow")]]),
+  });
 });
 
 // ── Overlap sanity check (exported helper for tests; not used at runtime) ────

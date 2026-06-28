@@ -13,6 +13,7 @@ export interface BookingFlow {
   datetime?: string;
   name?: string;
   phone?: string;
+  slotPage?: number;
 }
 
 export interface ReviewFlow {
@@ -37,12 +38,14 @@ export interface AdminFlow {
     | "staff_specialties"
     | "portfolio_caption"
     | "portfolio_tags"
-    | "review_response_text";
+    | "review_response_text"
+    | "settings_field";
   editingServiceId?: string;
   pendingService?: { name?: string; description?: string; priceCents?: number; durationMinutes?: number };
   pendingStaff?: { name?: string; specialties?: string[] };
   pendingPortfolio?: { caption?: string; serviceTags?: string[]; imageFileId?: string };
   pendingReviewId?: string;
+  pendingSetting?: { field: string };
 }
 
 export interface Session {

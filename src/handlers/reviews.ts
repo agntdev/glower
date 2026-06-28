@@ -23,7 +23,7 @@ const composer = new Composer<Ctx>();
 
 // ── Deferred review prompt (1-hour delay after booking completion) ─────────
 
-async function checkDueReviewPrompts(ctx: Ctx): Promise<void> {
+export async function checkDueReviewPrompts(ctx: Ctx): Promise<void> {
   const me = ctx.from?.id;
   if (!me) return;
   const bookings = await listBookings();
