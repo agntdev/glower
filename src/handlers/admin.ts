@@ -145,6 +145,17 @@ composer.on("message:text", async (ctx, next) => {
   if (!me || !(await isAdmin(me))) return next();
   const text = ctx.message.text.trim();
 
+  if (flow.step === "admin_new_id") {
+    const id = Number(text);
+    if (!Number.isInteger(id) || id <= 0) {
+      await ctx.reply("Send a valid numeric Telegram ID.");
+      return;
+    }
+    await addAdmin(id);
+    delete ctx.session.admin;
+    await ctx.reply(`🔐 Added admin ${id}.`, { reply_markup: backToAdmin() });
+    return;
+  }
   if (flow.step === "service_name") {
     if (text.length === 0 || text.length > 80) {
       await ctx.reply("Name must be 1–80 characters.");
@@ -292,6 +303,62 @@ composer.on("message:text", async (ctx, next) => {
     );
     return;
   }
+  if (flow.step === "service_edit_field") {
+    const svcId = flow.editingServiceId;
+    if (!svcId) return;
+    const services = await listServices();
+    const svc = services.find((s) => s.id === svcId);
+    if (!svc) {
+      delete ctx.session.admin;
+      await ctx.reply("Service not found.", { reply_markup: backToAdmin() });
+      return;
+    }
+    // The field to edit is stored in pendingService.name as the field key.
+    const field = flow.pendingService?.name;
+    if (field === "edit_name") {
+      if (text.length === 0 || text.length > 80) {
+        await ctx.reply("Name must be 1–80 characters.");
+        return;
+      }
+      await saveService({ ...svc, name: text });
+      delete ctx.session.admin;
+      await ctx.reply(`✅ Renamed to “${text}”.`, { reply_markup: backToAdmin() });
+      return;
+    }
+    if (field === "edit_description") {
+      if (text.length === 0 || text.length > 500) {
+        await ctx.reply("Description must be 1–500 characters.");
+        return;
+      }
+      await saveService({ ...svc, description: text });
+      delete ctx.session.admin;
+      await ctx.reply("✅ Description updated.", { reply_markup: backToAdmin() });
+      return;
+    }
+    if (field === "edit_price") {
+      const dollars = Number(text.replace(/[$,\s]/g, ""));
+      if (!Number.isFinite(dollars) || dollars < 0 || dollars > 100000) {
+        await ctx.reply("Send a number between 0 and 100000.");
+        return;
+      }
+      await saveService({ ...svc, priceCents: Math.round(dollars * 100) });
+      delete ctx.session.admin;
+      await ctx.reply(`✅ Price set to ${formatPrice(Math.round(dollars * 100))}.`, { reply_markup: backToAdmin() });
+      return;
+    }
+    if (field === "edit_duration") {
+      const mins = Number(text);
+      if (!Number.isInteger(mins) || mins < 5 || mins > 480) {
+        await ctx.reply("Send an integer between 5 and 480.");
+        return;
+      }
+      await saveService({ ...svc, durationMinutes: mins });
+      delete ctx.session.admin;
+      await ctx.reply(`✅ Duration set to ${mins} min.`, { reply_markup: backToAdmin() });
+      return;
+    }
+    return;
+  }
   if (flow.step === "review_response_text") {
     if (!flow.pendingReviewId) return;
     if (text.length === 0 || text.length > 500) {
@@ -330,11 +397,62 @@ composer.callbackQuery(/^admin:service-edit:(.+)$/, async (ctx) => {
   }
   await ctx.editMessageText(formatServiceDetail(svc), {
     reply_markup: inlineKeyboard([
+      [inlineButton("✏️ Edit this service", `admin:service-edit-field:${encodeURIComponent(svc.name)}`)],
       [inlineButton("🗑 Delete service", `admin:service-delete:${encodeURIComponent(svc.name)}`)],
       [inlineButton("⬅️ Back to services", "admin:services")],
     ]),
   });
 });
+
+composer.callbackQuery(/^admin:service-edit-field:(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+  const name = decodeURIComponent(ctx.match![1]!);
+  const services = await listServices();
+  const svc = services.find((s) => s.name === name);
+  if (!svc) {
+    await ctx.editMessageText("Service not found.", { reply_markup: backToAdmin() });
+    return;
+  }
+  await ctx.editMessageText(
+    `✏️ Edit “${svc.name}”\n\nPick a field to update:`,
+    {
+      reply_markup: inlineKeyboard([
+        [inlineButton("📝 Name", `admin:service-edit-do:${encodeURIComponent(svc.name)}:edit_name`)],
+        [inlineButton("📄 Description", `admin:service-edit-do:${encodeURIComponent(svc.name)}:edit_description`)],
+        [inlineButton("💵 Price", `admin:service-edit-do:${encodeURIComponent(svc.name)}:edit_price`)],
+        [inlineButton("⏱ Duration", `admin:service-edit-do:${encodeURIComponent(svc.name)}:edit_duration`)],
+        [inlineButton("⬅️ Back to service", `admin:service-edit:${encodeURIComponent(svc.name)}`)],
+      ]),
+    },
+  );
+});
+
+composer.callbackQuery(
+  /^admin:service-edit-do:(.+):(edit_name|edit_description|edit_price|edit_duration)$/,
+  async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+    const name = decodeURIComponent(ctx.match![1]!);
+    const field = ctx.match![2]!;
+    const services = await listServices();
+    const svc = services.find((s) => s.name === name);
+    if (!svc) {
+      await ctx.editMessageText("Service not found.", { reply_markup: backToAdmin() });
+      return;
+    }
+    ctx.session.admin = { step: "service_edit_field", editingServiceId: svc.id, pendingService: { name: field } };
+    const prompts: Record<string, string> = {
+      edit_name: "📝 Send the new name:",
+      edit_description: "📄 Send the new description:",
+      edit_price: "💵 Send the new price in dollars (e.g. 49.99):",
+      edit_duration: "⏱ Send the new duration in minutes (e.g. 60):",
+    };
+    await ctx.editMessageText(prompts[field] ?? "Send new value:", {
+      reply_markup: inlineKeyboard([[inlineButton("⬅️ Cancel", "admin:cancel-flow")]]),
+    });
+  },
+);
 
 composer.callbackQuery(/^admin:service-delete:(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
@@ -607,6 +725,14 @@ composer.callbackQuery(/^admin:booking-complete:([A-Za-z0-9_-]+)$/, async (ctx) 
     `✅ Booking marked completed.\n\nThe client can now leave a review from the Reviews menu.`,
     { reply_markup: backToAdmin() },
   );
+  try {
+    await ctx.api.sendMessage(
+      b.telegramId,
+      `✅ Your booking has been marked completed. You can leave a review from the Reviews menu.`,
+    );
+  } catch {
+    // Non-fatal: client may have blocked the bot.
+  }
 });
 
 composer.callbackQuery(/^admin:booking-cancel:([A-Za-z0-9_-]+)$/, async (ctx) => {
@@ -620,6 +746,14 @@ composer.callbackQuery(/^admin:booking-cancel:([A-Za-z0-9_-]+)$/, async (ctx) =>
   }
   await saveBooking({ ...b, status: "cancelled" });
   await ctx.editMessageText("⚪ Booking cancelled.", { reply_markup: backToAdmin() });
+  try {
+    await ctx.api.sendMessage(
+      b.telegramId,
+      `Your booking has been cancelled. Contact the studio if you have questions.`,
+    );
+  } catch {
+    // Non-fatal: client may have blocked the bot.
+  }
 });
 
 // ── Admins management ────────────────────────────────────────────────────────
@@ -645,6 +779,15 @@ composer.callbackQuery(/^admin:admin-remove:(\d+)$/, async (ctx) => {
   const id = Number(ctx.match![1]);
   await removeAdmin(id);
   await ctx.editMessageText(`🔐 Removed admin ${id}.`, { reply_markup: backToAdmin() });
+});
+
+composer.callbackQuery("admin:admin-new", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+  ctx.session.admin = { step: "admin_new_id" };
+  await ctx.editMessageText("🔐 Send the Telegram ID of the new admin:", {
+    reply_markup: inlineKeyboard([[inlineButton("⬅️ Cancel", "admin:cancel-flow")]]),
+  });
 });
 
 // ── CSV export ───────────────────────────────────────────────────────────────
@@ -696,15 +839,7 @@ export async function checkNoOverlapForTest(
     clientName: "",
     clientPhone: "",
   };
-  const all = await listBookings();
-  for (const b of all) {
-    if (b.id === ignoreId) continue;
-    if (b.status === "cancelled") continue;
-    if (staffId && b.staffId && b.staffId !== staffId) continue;
-    if (b.datetime !== datetime) continue;
-    if (await hasOverlap(tentative)) return false;
-  }
-  return true;
+  return !(await hasOverlap(tentative));
 }
 
 export default composer;

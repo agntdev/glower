@@ -35,7 +35,7 @@
         "expect": [
           {
             "method": "editMessageText",
-            "payload": { "text": "📖 Your bookings\n\n• 2099-01-01 09:00 UTC — Glow Facial (🟢 confirmed)" }
+            "payload": { "text": "📖 Your bookings\n\n• 2099-01-01 09:00 — Glow Facial (🟢 confirmed)" }
           }
         ]
       }

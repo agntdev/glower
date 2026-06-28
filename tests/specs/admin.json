@@ -116,5 +116,60 @@
         "expect": [{ "method": "sendDocument" }]
       }
     ]
+  },
+  {
+    "name": "admin adds a new admin by Telegram ID",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:admins" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:admin-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "555" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "admin:admins" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "admin:admin-remove:555" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "🔐 Removed admin 555." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "admin edits a service name via the edit flow",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Basic Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Simple cleansing" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "50" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "30" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:services" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-edit:Basic Facial" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "admin:service-edit-field:Basic Facial" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "✏️ Edit “Basic Facial”\n\nPick a field to update:" }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "admin:service-edit-do:Basic Facial:edit_name" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      { "send": { "text": "Deluxe Facial" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "admin:services" },
+        "expect": [{ "method": "editMessageText" }]
+      }
+    ]
   }
 ]

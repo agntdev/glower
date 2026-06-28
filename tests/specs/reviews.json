@@ -40,5 +40,47 @@
         ]
       }
     ]
+  },
+  {
+    "name": "review:done calls submitReview and shows incomplete when no flow active",
+    "steps": [
+      {
+        "send": { "callback": "review:done" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Review incomplete. Try again." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "review:photos for a nonexistent review says not available",
+    "steps": [
+      {
+        "send": { "callback": "review:photos:nonexistent" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Photos not available." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "review:prompt-dismiss edits after prompting is dismissed",
+    "steps": [
+      {
+        "send": { "callback": "review:prompt-dismiss" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "No problem — you can leave a review any time from the ⭐ Reviews menu." }
+          }
+        ]
+      }
+    ]
   }
 ]

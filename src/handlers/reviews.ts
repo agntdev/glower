@@ -6,16 +6,83 @@ import {
   registerMainMenuItem,
 } from "../toolkit/index.js";
 import {
+  getBooking,
   getReview,
+  listBookings,
   listBookingsForUser,
   listReviews,
+  listServices,
   newId,
   saveReview,
+  updateBooking,
 } from "../store.js";
 
 registerMainMenuItem({ label: "⭐ Reviews", data: "reviews:list", order: 40 });
 
 const composer = new Composer<Ctx>();
+
+// ── Deferred review prompt (1-hour delay after booking completion) ─────────
+
+async function checkDueReviewPrompts(ctx: Ctx): Promise<void> {
+  const me = ctx.from?.id;
+  if (!me) return;
+  const bookings = await listBookings();
+  const now = Date.now();
+  const myBookings = bookings.filter(
+    (b) =>
+      b.telegramId === me &&
+      b.status === "completed" &&
+      b.completedAt != null &&
+      !b.reviewPromptSent &&
+      now - b.completedAt >= 3_600_000,
+  );
+  if (myBookings.length === 0) return;
+  const myReviews = await listReviews();
+  const reviewedIds = new Set(myReviews.map((r) => r.bookingId));
+  for (const b of myBookings) {
+    if (reviewedIds.has(b.id)) continue;
+    const svc = (await listServices()).find((s) => s.id === b.serviceId);
+    await ctx.reply(
+      `⭐ How was your ${svc?.name ?? "appointment"}? Leave a review and share your photos!`,
+      {
+        reply_markup: inlineKeyboard([
+          [inlineButton("✍️ Leave a review", `review:start:${b.id}`)],
+          [inlineButton("➡️ Later", "review:prompt-dismiss")],
+        ]),
+      },
+    );
+    await updateBooking({ ...b, reviewPromptSent: true });
+  }
+}
+
+// Check for due review prompts on every message and callback.
+composer.on("message", async (ctx, next) => {
+  await checkDueReviewPrompts(ctx);
+  return next();
+});
+composer.on("callback_query", async (ctx, next) => {
+  await checkDueReviewPrompts(ctx);
+  return next();
+});
+
+composer.callbackQuery("review:prompt-dismiss", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText("No problem — you can leave a review any time from the ⭐ Reviews menu.");
+});
+
+composer.callbackQuery(/^review:photos:([A-Za-z0-9_-]+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const id = ctx.match![1]!;
+  const r = await getReview(id);
+  if (!r || r.photoFileIds.length === 0) {
+    await ctx.reply("Photos not available.");
+    return;
+  }
+  for (const fileId of r.photoFileIds) {
+    await ctx.replyWithPhoto(fileId);
+  }
+  await ctx.reply(`${"⭐".repeat(r.rating)} ${r.text || "(no text)"}`, { reply_markup: backToMenu() });
+});
 
 const backToMenu = () => inlineKeyboard([[inlineButton("⬅️ Back to menu", "menu:main")]]);
 
@@ -64,6 +131,17 @@ composer.callbackQuery("reviews:list", async (ctx) => {
       return `${stars} ${r.text || "(no text)"}${tail}${adminLine}`;
     })
     .join("\n\n");
+
+  for (const r of all.slice(0, 5)) {
+    if (r.photoFileIds.length > 0) {
+      rows.push([
+        inlineButton(
+          `📷 View ${r.photoFileIds.length} photo(s)`,
+          `review:photos:${r.id}`,
+        ),
+      ]);
+    }
+  }
 
   rows.push([inlineButton("📄 Show more reviews", "reviews:list")]);
   rows.push([inlineButton("⬅️ Back to menu", "menu:main")]);
@@ -167,7 +245,7 @@ composer.on("message:photo", async (ctx) => {
 
 composer.callbackQuery("review:done", async (ctx) => {
   await ctx.answerCallbackQuery();
-  await ctx.editMessageText("📷 Add photos or tap Skip photos.");
+  await submitReview(ctx);
 });
 
 composer.callbackQuery("review:skip-photos", async (ctx) => {
