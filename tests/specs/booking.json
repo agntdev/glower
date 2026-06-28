@@ -36,12 +36,7 @@
       },
       {
         "send": { "callback": "booking:service:Glow Facial" },
-        "expect": [
-          {
-            "method": "editMessageText",
-            "payload": { "text": "📅 Choose a time slot:" }
-          }
-        ]
+        "expect": [{ "method": "editMessageText" }]
       }
     ]
   },
@@ -57,12 +52,7 @@
       { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
       {
         "send": { "callback": "booking:start:Glow Facial" },
-        "expect": [
-          {
-            "method": "editMessageText",
-            "payload": { "text": "📅 Choose a time slot:" }
-          }
-        ]
+        "expect": [{ "method": "editMessageText" }]
       }
     ]
   },

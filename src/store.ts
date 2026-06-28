@@ -404,10 +404,13 @@ export interface Slot {
 
 /** Generate available slots for the next `settings.horizonDays` days, between
  *  startHour and endHour (exclusive), every `settings.slotMinutes` minutes.
- *  Slots that already have an overlapping booking are filtered out. */
+ *  Slots that already have an overlapping booking are filtered out using
+ *  duration-aware overlap logic (same semantics as hasOverlap). */
 export async function listAvailableSlots(now: Date = new Date()): Promise<Slot[]> {
   const settings = await getSettings();
-  const bookings = (await listBookings()).filter((b) => b.status !== "cancelled");
+  const [allBookings, services] = await Promise.all([listBookings(), listServices()]);
+  const svcMap = new Map(services.map((s) => [s.id, s] as const));
+  const bookings = allBookings.filter((b) => b.status !== "cancelled");
   const out: Slot[] = [];
   const start0 = new Date(now);
   start0.setUTCHours(0, 0, 0, 0);
@@ -419,26 +422,48 @@ export async function listAvailableSlots(now: Date = new Date()): Promise<Slot[]
       const dt = new Date(day);
       dt.setUTCHours(0, m, 0, 0);
       if (dt.getTime() <= now.getTime()) continue;
-      const iso = dt.toISOString();
+      const slotStart = dt.getTime();
+      const slotEnd = slotStart + settings.slotMinutes * 60_000;
       const conflict = bookings.some((b) => {
-        if (b.datetime !== iso) return false;
-        if (b.status === "cancelled") return false;
-        return true;
+        const bStart = new Date(b.datetime).getTime();
+        const bDur = (svcMap.get(b.serviceId)?.durationMinutes ?? settings.slotMinutes) * 60_000;
+        const bEnd = bStart + bDur;
+        return slotStart < bEnd && bStart < slotEnd;
       });
       if (conflict) continue;
-      out.push({ datetime: iso, label: formatSlotLabel(dt) });
+      const iso = dt.toISOString();
+      out.push({ datetime: iso, label: formatSlotLabel(dt, settings.timezone) });
     }
   }
   return out;
 }
 
-function formatSlotLabel(dt: Date): string {
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const day = days[dt.getUTCDay()];
-  const mon = months[dt.getUTCMonth()];
-  const dd = String(dt.getUTCDate()).padStart(2, "0");
-  const hh = String(dt.getUTCHours()).padStart(2, "0");
-  const mm = String(dt.getUTCMinutes()).padStart(2, "0");
-  return `${day} ${mon} ${dd}, ${hh}:${mm}`;
+function formatSlotLabel(dt: Date, timezone: string): string {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(dt);
+    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+    const month = parts.find((p) => p.type === "month")?.value ?? "";
+    const day = parts.find((p) => p.type === "day")?.value ?? "";
+    const hour = parts.find((p) => p.type === "hour")?.value ?? "";
+    const minute = parts.find((p) => p.type === "minute")?.value ?? "";
+    return `${weekday} ${month} ${day}, ${hour}:${minute}`;
+  } catch {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = days[dt.getUTCDay()];
+    const mon = months[dt.getUTCMonth()];
+    const dd = String(dt.getUTCDate()).padStart(2, "0");
+    const hh = String(dt.getUTCHours()).padStart(2, "0");
+    const mm = String(dt.getUTCMinutes()).padStart(2, "0");
+    return `${day} ${mon} ${dd}, ${hh}:${mm}`;
+  }
 }
