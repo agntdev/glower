@@ -260,7 +260,7 @@ composer.on("message:text", async (ctx, next) => {
 
     const svc = flow.serviceId ? await getService(flow.serviceId) : undefined;
     const staff = flow.staffId ? await getStaff(flow.staffId) : null;
-    const when = flow.datetime ? new Date(flow.datetime).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "?";
+    const when = flow.datetime ? new Date(flow.datetime).toISOString().replace("T", " ").slice(0, 16) : "?";
     const summary =
       "📋 Booking summary\n\n" +
       `Service: ${svc?.name ?? "?"}\n` +
@@ -343,7 +343,7 @@ composer.callbackQuery("booking:confirm", async (ctx) => {
   delete ctx.session.booking;
 
   await ctx.editMessageText(
-    `✅ Booked!\n\n${svc.name}\n${new Date(booking.datetime).toISOString().replace("T", " ").slice(0, 16)} UTC\n\n` +
+    `✅ Booked!\n\n${svc.name}\n${new Date(booking.datetime).toISOString().replace("T", " ").slice(0, 16)}\n\n` +
       "We'll remind you when it's time. See you soon! 💅",
     { reply_markup: backToMenu() },
   );
@@ -353,7 +353,7 @@ composer.callbackQuery("booking:confirm", async (ctx) => {
   const { notifyAdmins } = await import("../notify.js");
   await notifyAdmins(
     ctx,
-    `📅 New booking\n\n${svc.name}\n${new Date(booking.datetime).toISOString().replace("T", " ").slice(0, 16)} UTC\nClient: ${booking.clientName} · ${booking.clientPhone}`,
+    `📅 New booking\n\n${svc.name}\n${new Date(booking.datetime).toISOString().replace("T", " ").slice(0, 16)}\nClient: ${booking.clientName} · ${booking.clientPhone}`,
   );
 });
 

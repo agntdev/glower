@@ -31,7 +31,7 @@ export function formatBookingLine(b: Booking, services: Map<string, Service>): s
   const svc = services.get(b.serviceId);
   const svcName = svc?.name ?? "(deleted service)";
   const when = new Date(b.datetime);
-  const iso = when.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  const iso = when.toISOString().replace("T", " ").slice(0, 16);
   const status = b.status === "confirmed" ? "🟢 confirmed" : b.status === "completed" ? "✅ completed" : "⚪ cancelled";
   return `• ${iso} — ${svcName} (${status})`;
 }

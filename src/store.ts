@@ -45,6 +45,8 @@ export interface Booking {
   clientPhone: string;
   /** Set when an admin marks the booking completed; ms since epoch. */
   completedAt?: number;
+  /** Set after the 1-hour delayed review prompt has been sent. */
+  reviewPromptSent?: boolean;
 }
 
 export type BookingStatus = "confirmed" | "completed" | "cancelled";
@@ -85,6 +87,8 @@ export interface Settings {
   slotMinutes: number;
   /** How many days ahead users can book. */
   horizonDays: number;
+  /** IANA timezone string, e.g. "America/New_York". Defaults to "UTC". */
+  timezone: string;
 }
 
 // ── Defaults & keys ───────────────────────────────────────────────────────────
@@ -94,6 +98,7 @@ const DEFAULT_SETTINGS: Settings = {
   endHour: 17,
   slotMinutes: 60,
   horizonDays: 14,
+  timezone: "UTC",
 };
 
 const KEY = {
@@ -435,5 +440,5 @@ function formatSlotLabel(dt: Date): string {
   const dd = String(dt.getUTCDate()).padStart(2, "0");
   const hh = String(dt.getUTCHours()).padStart(2, "0");
   const mm = String(dt.getUTCMinutes()).padStart(2, "0");
-  return `${day} ${mon} ${dd}, ${hh}:${mm} UTC`;
+  return `${day} ${mon} ${dd}, ${hh}:${mm}`;
 }

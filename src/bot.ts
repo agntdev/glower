@@ -27,6 +27,7 @@ export interface ReviewFlow {
 export interface AdminFlow {
   step:
     | "menu"
+    | "admin_new_id"
     | "service_name"
     | "service_desc"
     | "service_price"

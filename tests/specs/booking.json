@@ -93,7 +93,7 @@
         "expect": [
           {
             "method": "editMessageText",
-            "payload": { "text": "✅ Booked!\n\nGlow Facial\n2099-01-01 09:00 UTC\n\nWe'll remind you when it's time. See you soon! 💅" }
+            "payload": { "text": "✅ Booked!\n\nGlow Facial\n2099-01-01 09:00\n\nWe'll remind you when it's time. See you soon! 💅" }
           }
         ]
       }
