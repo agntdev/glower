@@ -1,5 +1,5 @@
 import { Composer, InputFile } from "grammy";
-import type { Ctx } from "../bot.js";
+import type { AdminFlow, Ctx } from "../bot.js";
 import {
   inlineButton,
   inlineKeyboard,
@@ -11,6 +11,7 @@ import {
   deleteStaff,
   getBooking,
   getReview,
+  getSettings,
   hasOverlap,
   isAdmin,
   listAdmins,
@@ -24,6 +25,7 @@ import {
   saveBooking,
   savePortfolioItem,
   saveService,
+  saveSettings,
   saveStaff,
   updateReview,
 } from "../store.js";
@@ -95,6 +97,7 @@ async function renderAdminMenu(ctx: Ctx): Promise<void> {
         [inlineButton("⭐ Reviews", "admin:reviews")],
         [inlineButton("📅 Bookings", "admin:bookings")],
         [inlineButton("🔐 Admins", "admin:admins")],
+        [inlineButton("⚙ Settings", "admin:settings")],
         [inlineButton("📤 Export bookings CSV", "admin:export")],
         [inlineButton("⬅️ Back to menu", "menu:main")],
       ]),
@@ -374,6 +377,79 @@ composer.on("message:text", async (ctx, next) => {
     await updateReview({ ...r, adminResponse: text });
     delete ctx.session.admin;
     await ctx.reply("✅ Response posted.", { reply_markup: backToAdmin() });
+    return;
+  }
+  if (flow.step === "settings_start_hour") {
+    const h = Number(text);
+    if (!Number.isInteger(h) || h < 0 || h > 23) {
+      await ctx.reply("Send an integer between 0 and 23.");
+      return;
+    }
+    const s = await getSettings();
+    if (h >= s.endHour) {
+      await ctx.reply("Start hour must be before end hour. Try again.");
+      return;
+    }
+    await saveSettings({ ...s, startHour: h });
+    delete ctx.session.admin;
+    await ctx.reply(`✅ Start hour set to ${h}:00.`, { reply_markup: backToAdmin() });
+    return;
+  }
+  if (flow.step === "settings_end_hour") {
+    const h = Number(text);
+    if (!Number.isInteger(h) || h < 0 || h > 23) {
+      await ctx.reply("Send an integer between 0 and 23.");
+      return;
+    }
+    const s = await getSettings();
+    if (h <= s.startHour) {
+      await ctx.reply("End hour must be after start hour. Try again.");
+      return;
+    }
+    await saveSettings({ ...s, endHour: h });
+    delete ctx.session.admin;
+    await ctx.reply(`✅ End hour set to ${h}:00.`, { reply_markup: backToAdmin() });
+    return;
+  }
+  if (flow.step === "settings_slot_minutes") {
+    const mins = Number(text);
+    if (!Number.isInteger(mins) || mins < 5 || mins > 240) {
+      await ctx.reply("Send an integer between 5 and 240.");
+      return;
+    }
+    const s = await getSettings();
+    await saveSettings({ ...s, slotMinutes: mins });
+    delete ctx.session.admin;
+    await ctx.reply(`✅ Slot interval set to ${mins} min.`, { reply_markup: backToAdmin() });
+    return;
+  }
+  if (flow.step === "settings_horizon_days") {
+    const days = Number(text);
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      await ctx.reply("Send an integer between 1 and 90.");
+      return;
+    }
+    const s = await getSettings();
+    await saveSettings({ ...s, horizonDays: days });
+    delete ctx.session.admin;
+    await ctx.reply(`✅ Booking horizon set to ${days} days.`, { reply_markup: backToAdmin() });
+    return;
+  }
+  if (flow.step === "settings_timezone") {
+    const tz = text.trim();
+    if (tz.length === 0 || tz.length > 80) {
+      await ctx.reply("Send a valid IANA timezone string.");
+      return;
+    }
+    // Basic validation: must contain a / or be "UTC"
+    if (!tz.includes("/") && tz !== "UTC") {
+      await ctx.reply("Send a valid IANA timezone (e.g. America/New_York, Europe/London, UTC).");
+      return;
+    }
+    const s = await getSettings();
+    await saveSettings({ ...s, timezone: tz });
+    delete ctx.session.admin;
+    await ctx.reply(`✅ Timezone set to ${tz}.`, { reply_markup: backToAdmin() });
     return;
   }
   return next();
@@ -687,6 +763,34 @@ composer.callbackQuery("admin:bookings", async (ctx) => {
   );
 });
 
+composer.callbackQuery("admin:complete-first", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+  const bookings = await listBookings();
+  const confirmed = bookings.filter((b) => b.status === "confirmed");
+  if (confirmed.length === 0) {
+    await ctx.editMessageText("No confirmed bookings to complete.", { reply_markup: backToAdmin() });
+    return;
+  }
+  const b = confirmed[0]!;
+  const updated = { ...b, status: "completed" as const, completedAt: Date.now() };
+  await saveBooking(updated);
+  await ctx.editMessageText(
+    `✅ Booking completed.\n\nThe client can now leave a review from the Reviews menu.`,
+    { reply_markup: backToAdmin() },
+  );
+  try {
+    await ctx.api.sendMessage(
+      b.telegramId,
+      `✅ Your booking has been marked completed. You can leave a review from the Reviews menu.`,
+    );
+  } catch {
+    // Non-fatal
+  }
+  const { pushReviewPrompt } = await import("./reviews.js");
+  pushReviewPrompt(ctx.api, b.id);
+});
+
 composer.callbackQuery(/^admin:booking-edit:([A-Za-z0-9_-]+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   if (!(await isAdmin(ctx.from?.id ?? 0))) return;
@@ -733,6 +837,9 @@ composer.callbackQuery(/^admin:booking-complete:([A-Za-z0-9_-]+)$/, async (ctx) 
   } catch {
     // Non-fatal: client may have blocked the bot.
   }
+  // Schedule push review prompt after 1 hour.
+  const { pushReviewPrompt } = await import("./reviews.js");
+  pushReviewPrompt(ctx.api, id);
 });
 
 composer.callbackQuery(/^admin:booking-cancel:([A-Za-z0-9_-]+)$/, async (ctx) => {
@@ -820,6 +927,54 @@ composer.callbackQuery("admin:export", async (ctx) => {
   );
   await ctx.reply("📤 Sent.", { reply_markup: backToAdmin() });
 });
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+composer.callbackQuery("admin:settings", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+  const s = await getSettings();
+  await ctx.editMessageText(
+    "⚙ Settings\n\n" +
+      `Start hour: ${s.startHour}:00\n` +
+      `End hour: ${s.endHour}:00\n` +
+      `Slot interval: ${s.slotMinutes} min\n` +
+      `Booking horizon: ${s.horizonDays} days\n` +
+      `Timezone: ${s.timezone}`,
+    {
+      reply_markup: inlineKeyboard([
+        [inlineButton("🕐 Start hour", "admin:settings-edit:start_hour")],
+        [inlineButton("🕐 End hour", "admin:settings-edit:end_hour")],
+        [inlineButton("⏱ Slot interval", "admin:settings-edit:slot_minutes")],
+        [inlineButton("📆 Horizon", "admin:settings-edit:horizon_days")],
+        [inlineButton("🌍 Timezone", "admin:settings-edit:timezone")],
+        [inlineButton("⬅️ Back to admin", "admin:menu")],
+      ]),
+    },
+  );
+});
+
+composer.callbackQuery(
+  /^admin:settings-edit:(start_hour|end_hour|slot_minutes|horizon_days|timezone)$/,
+  async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!(await isAdmin(ctx.from?.id ?? 0))) return;
+    const field = ctx.match![1]!;
+    const prompts: Record<string, { step: string; text: string }> = {
+      start_hour: { step: "settings_start_hour", text: "🕐 Send start hour (0–23, e.g. 9):" },
+      end_hour: { step: "settings_end_hour", text: "🕐 Send end hour (0–23, e.g. 17):" },
+      slot_minutes: { step: "settings_slot_minutes", text: "⏱ Send slot interval in minutes (5–240):" },
+      horizon_days: { step: "settings_horizon_days", text: "📆 Send booking horizon in days (1–90):" },
+      timezone: { step: "settings_timezone", text: "🌍 Send IANA timezone (e.g. America/New_York, Europe/London, UTC):" },
+    };
+    const p = prompts[field];
+    if (!p) return;
+    ctx.session.admin = { step: p.step as AdminFlow["step"] };
+    await ctx.editMessageText(p.text, {
+      reply_markup: inlineKeyboard([[inlineButton("⬅️ Cancel", "admin:cancel-flow")]]),
+    });
+  },
+);
 
 // ── Overlap sanity check (exported helper for tests; not used at runtime) ────
 

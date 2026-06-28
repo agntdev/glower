@@ -1,0 +1,113 @@
+[
+  {
+    "name": "end-to-end review submission with multi-photo upload",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "admin:service-new" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Glow Facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Hydrating facial" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "79" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "60" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:start:Glow Facial" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "booking:slot:2099-01-01T09:00:00.000Z" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "Alex" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "+15551234567" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "booking:confirm" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "admin:complete-first" },
+        "expect": [{ "method": "editMessageText" }, { "method": "sendMessage" }]
+      },
+      {
+        "send": { "callback": "review:start-first" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "⭐ How would you rate your appointment?\n\nTap a number:" }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "review:rate:4" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "✍️ Tell us about your experience (or tap Skip):" }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "review:skip-text" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "📷 Send one or more photos of your result, then tap Done." }
+          }
+        ]
+      },
+      {
+        "send": {
+          "update": {
+            "update_id": 1000,
+            "message": {
+              "message_id": 1000,
+              "date": 0,
+              "chat": { "id": 1, "type": "private", "first_name": "Test" },
+              "from": { "id": 1, "is_bot": false, "first_name": "Test" },
+              "photo": [
+                { "file_id": "photo_thumb_1", "file_unique_id": "pt1", "width": 90, "height": 60, "file_size": 1 },
+                { "file_id": "photo_full_1", "file_unique_id": "pf1", "width": 800, "height": 600, "file_size": 100 }
+              ]
+            }
+          }
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "📷 Photo added (1). Send more, or tap Done." }
+          }
+        ]
+      },
+      {
+        "send": {
+          "update": {
+            "update_id": 1001,
+            "message": {
+              "message_id": 1001,
+              "date": 0,
+              "chat": { "id": 1, "type": "private", "first_name": "Test" },
+              "from": { "id": 1, "is_bot": false, "first_name": "Test" },
+              "photo": [
+                { "file_id": "photo_thumb_2", "file_unique_id": "pt2", "width": 90, "height": 60, "file_size": 1 },
+                { "file_id": "photo_full_2", "file_unique_id": "pf2", "width": 800, "height": 600, "file_size": 100 }
+              ]
+            }
+          }
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "📷 Photo added (2). Send more, or tap Done." }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "review:done" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "✅ Thanks for your review!" }
+          }
+        ]
+      },
+      {
+        "send": { "callback": "reviews:list" },
+        "expect": [
+          {
+            "method": "editMessageText"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -171,5 +171,44 @@
         "expect": [{ "method": "editMessageText" }]
       }
     ]
+  },
+  {
+    "name": "admin views and updates studio settings",
+    "steps": [
+      { "send": { "text": "/admin" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "admin:claim" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "admin:settings" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "admin:settings-edit:start_hour" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "🕐 Send start hour (0–23, e.g. 9):" }
+          }
+        ]
+      },
+      { "send": { "text": "8" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "admin:settings" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "admin:settings-edit:slot_minutes" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "⏱ Send slot interval in minutes (5–240):" }
+          }
+        ]
+      },
+      { "send": { "text": "30" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "admin:settings" },
+        "expect": [{ "method": "editMessageText" }]
+      }
+    ]
   }
 ]

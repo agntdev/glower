@@ -143,7 +143,9 @@ composer.callbackQuery(/^booking:staff:(.+)$/, async (ctx) => {
 // ── Step 3: slot ─────────────────────────────────────────────────────────────
 
 async function renderSlotStep(ctx: Ctx): Promise<void> {
-  const slots = await listAvailableSlots();
+  const flow = ctx.session.booking;
+  if (!flow) return;
+  const slots = await listAvailableSlots(new Date(), flow.serviceId);
   if (slots.length === 0) {
     await ctx.editMessageText(
       "📅 No available slots in the next two weeks.\nPlease check back later or message the studio.",
