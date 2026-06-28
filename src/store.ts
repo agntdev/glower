@@ -404,10 +404,22 @@ export interface Slot {
 
 /** Generate available slots for the next `settings.horizonDays` days, between
  *  startHour and endHour (exclusive), every `settings.slotMinutes` minutes.
- *  Slots that already have an overlapping booking are filtered out. */
-export async function listAvailableSlots(now: Date = new Date()): Promise<Slot[]> {
+ *  Slots that overlap an existing booking (by duration) are filtered out.
+ *  When `serviceId` is provided, the chosen service's duration is used; otherwise
+ *  the configured `slotMinutes` acts as the minimum granularity. */
+export async function listAvailableSlots(now: Date = new Date(), serviceId?: string): Promise<Slot[]> {
   const settings = await getSettings();
   const bookings = (await listBookings()).filter((b) => b.status !== "cancelled");
+  // Pre-compute each booking's duration window so we don't re-read services per slot.
+  const services = await listServices();
+  const svcMap = new Map(services.map((s) => [s.id, s] as const));
+  const windows = bookings.map((b) => {
+    const dur = svcMap.get(b.serviceId)?.durationMinutes ?? settings.slotMinutes;
+    const start = new Date(b.datetime).getTime();
+    return { start, end: start + dur * 60_000 };
+  });
+  const svc = serviceId ? svcMap.get(serviceId) : undefined;
+  const slotDur = svc?.durationMinutes ?? settings.slotMinutes;
   const out: Slot[] = [];
   const start0 = new Date(now);
   start0.setUTCHours(0, 0, 0, 0);
@@ -419,13 +431,11 @@ export async function listAvailableSlots(now: Date = new Date()): Promise<Slot[]
       const dt = new Date(day);
       dt.setUTCHours(0, m, 0, 0);
       if (dt.getTime() <= now.getTime()) continue;
-      const iso = dt.toISOString();
-      const conflict = bookings.some((b) => {
-        if (b.datetime !== iso) return false;
-        if (b.status === "cancelled") return false;
-        return true;
-      });
+      const slotStart = dt.getTime();
+      const slotEnd = slotStart + slotDur * 60_000;
+      const conflict = windows.some((w) => slotStart < w.end && w.start < slotEnd);
       if (conflict) continue;
+      const iso = dt.toISOString();
       out.push({ datetime: iso, label: formatSlotLabel(dt) });
     }
   }

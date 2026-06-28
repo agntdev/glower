@@ -23,6 +23,82 @@ const composer = new Composer<Ctx>();
 
 // ── Deferred review prompt (1-hour delay after booking completion) ─────────
 
+/**
+ * Push a review prompt to a client after a delay. Called when a booking is
+ * marked completed. Uses setTimeout; if the process restarts before the timer
+ * fires, the poll-based check in the middleware catches the missed prompt as a
+ * fallback on next user interaction.
+ */
+export function pushReviewPrompt(
+  api: { sendMessage: (chatId: number, text: string, other?: Record<string, unknown>) => Promise<unknown> },
+  bookingId: string,
+  delayMs: number = 3_600_000,
+): void {
+  setTimeout(async () => {
+    try {
+      const b = await getBooking(bookingId);
+      if (!b || b.status !== "completed" || b.reviewPromptSent) return;
+      const myReviews = await listReviews();
+      if (myReviews.some((r) => r.bookingId === bookingId)) return;
+      const svc = (await listServices()).find((s) => s.id === b.serviceId);
+      await api.sendMessage(
+        b.telegramId,
+        `⭐ How was your ${svc?.name ?? "appointment"}? Leave a review and share your photos!`,
+        {
+          reply_markup: inlineKeyboard([
+            [inlineButton("✍️ Leave a review", `review:start:${b.id}`)],
+            [inlineButton("➡️ Later", "review:prompt-dismiss")],
+          ]),
+        } as Record<string, unknown>,
+      );
+      await updateBooking({ ...b, reviewPromptSent: true });
+    } catch {
+      // User may have blocked the bot — non-fatal.
+    }
+  }, delayMs);
+}
+
+/**
+ * Schedule push prompts for all completed bookings whose 1-hour window has
+ * already elapsed but haven't had a prompt sent yet. Call at startup to cover
+ * bookings completed while the bot was offline.
+ */
+export function scheduleStaleReviewPrompts(
+  api: { sendMessage: (chatId: number, text: string, other?: Record<string, unknown>) => Promise<unknown> },
+): void {
+  (async () => {
+    const bookings = await listBookings();
+    const now = Date.now();
+    for (const b of bookings) {
+      if (
+        b.status === "completed" &&
+        b.completedAt != null &&
+        !b.reviewPromptSent &&
+        now - b.completedAt >= 3_600_000
+      ) {
+        const myReviews = await listReviews();
+        if (myReviews.some((r) => r.bookingId === b.id)) continue;
+        const svc = (await listServices()).find((s) => s.id === b.serviceId);
+        try {
+          await api.sendMessage(
+            b.telegramId,
+            `⭐ How was your ${svc?.name ?? "appointment"}? Leave a review and share your photos!`,
+            {
+              reply_markup: inlineKeyboard([
+                [inlineButton("✍️ Leave a review", `review:start:${b.id}`)],
+                [inlineButton("➡️ Later", "review:prompt-dismiss")],
+              ]),
+            } as Record<string, unknown>,
+          );
+          await updateBooking({ ...b, reviewPromptSent: true });
+        } catch {
+          // User may have blocked the bot — non-fatal.
+        }
+      }
+    }
+  })();
+}
+
 async function checkDueReviewPrompts(ctx: Ctx): Promise<void> {
   const me = ctx.from?.id;
   if (!me) return;
@@ -149,6 +225,47 @@ composer.callbackQuery("reviews:list", async (ctx) => {
 });
 
 // ── Submit flow ──────────────────────────────────────────────────────────────
+
+composer.callbackQuery("review:start-first", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const me = ctx.from?.id;
+  if (!me) {
+    await ctx.editMessageText("Could not detect your account. Try /start.", {
+      reply_markup: backToMenu(),
+    });
+    return;
+  }
+  const [myBookings, myReviews] = await Promise.all([
+    listBookingsForUser(me),
+    listReviews(),
+  ]);
+  const completed = myBookings.filter((b) => b.status === "completed");
+  const reviewedIds = new Set(myReviews.filter((r) => r.telegramId === me).map((r) => r.bookingId));
+  const pending = completed.filter((b) => !reviewedIds.has(b.id));
+  if (pending.length === 0) {
+    await ctx.editMessageText("No completed bookings awaiting a review.", {
+      reply_markup: backToMenu(),
+    });
+    return;
+  }
+  const bookingId = pending[0]!.id;
+  ctx.session.review = { step: "rating", bookingId, photoFileIds: [] };
+  await ctx.editMessageText(
+    "⭐ How would you rate your appointment?\n\nTap a number:",
+    {
+      reply_markup: inlineKeyboard([
+        [
+          inlineButton("1", "review:rate:1"),
+          inlineButton("2", "review:rate:2"),
+          inlineButton("3", "review:rate:3"),
+          inlineButton("4", "review:rate:4"),
+          inlineButton("5", "review:rate:5"),
+        ],
+        [inlineButton("⬅️ Cancel", "review:cancel")],
+      ]),
+    },
+  );
+});
 
 composer.callbackQuery(/^review:start:([A-Za-z0-9_-]+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();

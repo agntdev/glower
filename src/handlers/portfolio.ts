@@ -1,7 +1,7 @@
 import { Composer } from "grammy";
 import type { Ctx } from "../bot.js";
 import { inlineButton, inlineKeyboard, registerMainMenuItem } from "../toolkit/index.js";
-import { listPortfolio } from "../store.js";
+import { listPortfolio, listServices } from "../store.js";
 
 registerMainMenuItem({ label: "📸 Portfolio", data: "portfolio:list", order: 30 });
 
@@ -19,24 +19,41 @@ composer.callbackQuery("portfolio:list", async (ctx) => {
     );
     return;
   }
-  // Send the first image as its own message (so it actually renders with caption)
-  // then a follow-up text-only index with the rest as inline buttons.
-  const [first, ...rest] = items;
-  await ctx.editMessageText("📸 Portfolio\n\nTap an item to view it.");
+  const services = await listServices();
+  const svcName = new Map(services.map((s) => [s.id, s.name] as const));
+
+  // Group items by service tag; items with no tags go under "Other".
+  const groups = new Map<string, typeof items>();
+  for (const item of items) {
+    const tags = item.serviceTags.length > 0 ? item.serviceTags : ["Other"];
+    for (const tag of tags) {
+      const key = svcName.get(tag) ?? tag;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    }
+  }
+
+  let body = "📸 Portfolio\n\n";
+  for (const [group, groupItems] of groups) {
+    body += `▸ ${group}\n`;
+    body += groupItems.map((p) => `  • ${p.caption || "Untitled"}`).join("\n") + "\n\n";
+  }
+
+  // Build buttons for viewing individual items.
+  const rows: ReturnType<typeof inlineButton>[][] = [];
+  for (const item of items.slice(0, 10)) {
+    rows.push([inlineButton(`🖼 ${item.caption || "Untitled"}`, `portfolio:view:${item.id}`)]);
+  }
+  rows.push([inlineButton("⬅️ Back to menu", "menu:main")]);
+  await ctx.editMessageText(body, { reply_markup: inlineKeyboard(rows) });
+
+  // Send first photo inline when viewing the gallery.
+  const first = items[0];
   if (first) {
     await ctx.replyWithPhoto(first.imageFileId, {
       caption: first.caption || undefined,
-      reply_markup: inlineKeyboard([
-        [inlineButton("⬅️ Back to menu", "menu:main")],
-      ]),
+      reply_markup: inlineKeyboard([[inlineButton("⬅️ Back to menu", "menu:main")]]),
     });
-  }
-  if (rest.length > 0) {
-    const rows = rest.map((p) => [
-      inlineButton(`🖼 ${p.caption || "Untitled"}`, `portfolio:view:${p.id}`),
-    ]);
-    rows.push([inlineButton("⬅️ Back to menu", "menu:main")]);
-    await ctx.reply("More from the studio:", { reply_markup: inlineKeyboard(rows) });
   }
 });
 
